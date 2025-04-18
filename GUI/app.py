@@ -5,7 +5,9 @@ import time
 from tkinter import filedialog
 from PIL import Image, ImageTk
 from threading import Thread
+from ultralytics import YOLO
 from utils.preprocessing import Preprocess
+from utils.detection import Detection
 
 def log_image_stats(image, tag=""):
     """
@@ -30,6 +32,7 @@ def log_image_stats(image, tag=""):
     print(f"Mean Brightness (Y): {mean_brightness:.2f}")
     print(f"Std Contrast (Y): {std_contrast:.2f}")
     print("-------------------------------")
+    
 class TrafficSignApp:
     def __init__(self, root):
         self.root = root
@@ -68,11 +71,13 @@ class TrafficSignApp:
 
         self.cap = None
         self.running = False
+        
+        self.yolo_model = YOLO('models/yolov8m_tsd_best.pt')
 
     def load_image(self):
         """
-        This function loads an image from the file system and displays it on the canvas.
-        load image: PIL image -> OpenCV image -> pre-process -> OpenCV image -> PIL image
+        Load an image from the file system and display it on the canvas.
+        Process the image and detect traffic signs.
         """
         self.stop_camera()
         self.root.after(100)
@@ -80,20 +85,25 @@ class TrafficSignApp:
         if file_path:
             image = Image.open(file_path)
             image = image.resize((800, 600))
+
             # Convert PIL image to NumPy array for OpenCV
             image_np = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
-            
+
             # Log stats before processing
-            # log_image_stats(image_np, tag="(Before Preprocessing)")
-            
+            log_image_stats(image_np, tag="(Before Preprocessing)")
+
+            # Preprocess the image
             processed_image = Preprocess.pre_process(image_np)
             
             # Log stats after processing
-            # log_image_stats(processed_image, tag="(After Preprocessing)")
-            
+            log_image_stats(processed_image, tag="(After Preprocessing)")
+
+            # Detect traffic signs
+            processed_image_with_boxes = Detection.detect_traffic_sign(processed_image, self.yolo_model)
+
             # Convert back to PIL Image for Tkinter
-            processed_image = Image.fromarray(cv2.cvtColor(processed_image, cv2.COLOR_BGR2RGB))
-            self.img = ImageTk.PhotoImage(processed_image)
+            processed_image_with_boxes = Image.fromarray(cv2.cvtColor(processed_image_with_boxes, cv2.COLOR_BGR2RGB))
+            self.img = ImageTk.PhotoImage(processed_image_with_boxes)
             self.canvas.create_image(0, 0, anchor="nw", image=self.img)
 
     def start_camera(self):
@@ -108,6 +118,7 @@ class TrafficSignApp:
     def camera_loop(self):
         """
         This function continuously captures frames from the camera and updates the canvas.
+        Detect traffic signs in each frame.
         """
         last_log_time = 0  
         log_interval = 5
@@ -115,7 +126,7 @@ class TrafficSignApp:
             ret, frame = self.cap.read()
             if ret:
                 self.current_frame = frame.copy()
-                
+
                 now = time.time()
                 if now - last_log_time >= log_interval:
                     log_image_stats(self.current_frame, tag="(Camera Frame - Before Preprocessing)")
@@ -125,13 +136,19 @@ class TrafficSignApp:
                 else:
                     processed_image = Preprocess.pre_process(self.current_frame)
 
-                display_frame = cv2.cvtColor(self.current_frame, cv2.COLOR_BGR2RGB)
+                # Detect traffic signs in the frame
+                frame_with_boxes = detect_traffic_sign(processed_image, self.yolo_model)
+
+                # Convert to RGB for displaying on Tkinter canvas
+                display_frame = cv2.cvtColor(frame_with_boxes, cv2.COLOR_BGR2RGB)
                 display_frame = cv2.resize(display_frame, (800, 600))
+
                 img = Image.fromarray(display_frame)
                 imgtk = ImageTk.PhotoImage(image=img)
 
+                # Update the canvas with the new frame
                 self.root.after(0, self.update_canvas, imgtk)
-                cv2.waitKey(15) 
+                cv2.waitKey(15)
                 
     def update_canvas(self, imgtk):
         """
