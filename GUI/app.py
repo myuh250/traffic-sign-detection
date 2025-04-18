@@ -122,32 +122,35 @@ class TrafficSignApp:
         """
         last_log_time = 0  
         log_interval = 5
+
         while self.running and self.cap.isOpened():
             ret, frame = self.cap.read()
             if ret:
                 self.current_frame = frame.copy()
 
+                # --- Display raw frame only ---
+                display_frame = cv2.cvtColor(self.current_frame, cv2.COLOR_BGR2RGB)
+                display_frame = cv2.resize(display_frame, (800, 600))
+                img = Image.fromarray(display_frame)
+                imgtk = ImageTk.PhotoImage(image=img)
+                self.root.after(0, self.update_canvas, imgtk)
+
+                # --- Background processing for detection ---
                 now = time.time()
                 if now - last_log_time >= log_interval:
+                    # Logging input stats
                     log_image_stats(self.current_frame, tag="(Camera Frame - Before Preprocessing)")
                     processed_image = Preprocess.pre_process(self.current_frame)
                     log_image_stats(processed_image, tag="(Camera Frame - After Preprocessing)")
+
+                    # Run detection (in background)
+                    _ = Detection.detect_traffic_sign(processed_image, self.yolo_model)
+
                     last_log_time = now
                 else:
                     processed_image = Preprocess.pre_process(self.current_frame)
+                    _ = Detection.detect_traffic_sign(processed_image, self.yolo_model)
 
-                # Detect traffic signs in the frame
-                frame_with_boxes = detect_traffic_sign(processed_image, self.yolo_model)
-
-                # Convert to RGB for displaying on Tkinter canvas
-                display_frame = cv2.cvtColor(frame_with_boxes, cv2.COLOR_BGR2RGB)
-                display_frame = cv2.resize(display_frame, (800, 600))
-
-                img = Image.fromarray(display_frame)
-                imgtk = ImageTk.PhotoImage(image=img)
-
-                # Update the canvas with the new frame
-                self.root.after(0, self.update_canvas, imgtk)
                 cv2.waitKey(15)
                 
     def update_canvas(self, imgtk):

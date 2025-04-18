@@ -1,34 +1,43 @@
 import cv2
 import numpy as np
+import time
 
 class Detection:
+    last_log_time = 0
+    log_interval = 5  
+
+    @staticmethod
     def detect_traffic_sign(frame, model):
         """
         Detect traffic signs using YOLO and draw bounding boxes on the frame.
-        Args:
-        - frame: The processed image/frame from the camera or file.
-        - model: The YOLO model for detection.
-        Returns:
-        - frame_with_boxes: The input frame with bounding boxes drawn.
+        Logs only every 5 seconds.
         """
         try:
-            results = model(frame)[0]
+            now = time.time()
+            should_log = now - Detection.last_log_time >= Detection.log_interval
 
-            # Loop through the results and draw bounding boxes
+            results = model(frame, verbose=False)[0]
+
             for box in results.boxes:
-                x1, y1, x2, y2 = map(int, box.xyxy[0]) 
-                cls_id = int(box.cls[0])  
-                confidence = float(box.conf[0])  
-                label = Detection.get_class_name(cls_id) 
+                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                cls_id = int(box.cls[0])
+                confidence = float(box.conf[0])
+                label = Detection.get_class_name(cls_id)
 
-                # Draw the bounding box and label
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
                 cv2.putText(frame, f'{label} {confidence:.2f}', 
                             (x1, y1 - 10), 
                             cv2.FONT_HERSHEY_SIMPLEX, 
                             0.8, (0, 255, 0), 2)
-            return frame  
-        
+
+                if should_log:
+                    print(f"[YOLO] Detected: {label} ({confidence:.2f}) at ({x1}, {y1}), ({x2}, {y2})")
+
+            if should_log:
+                Detection.last_log_time = now
+
+            return frame
+
         except Exception as e:
             print("Error in detection:", e)
             return frame
