@@ -1,9 +1,35 @@
 import tkinter as tk
+import cv2
+import numpy as np
+import time
 from tkinter import filedialog
 from PIL import Image, ImageTk
-import cv2
 from threading import Thread
+from utils.preprocessing import Preprocess
 
+def log_image_stats(image, tag=""):
+    """
+    Logs key image statistics for debugging and quality checks.
+    
+    Args:
+        image (np.ndarray): BGR image (OpenCV format).
+        tag (str): Optional tag to label the logging context.
+    """
+    # Convert to grayscale for Laplacian variance
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    laplacian_var = cv2.Laplacian(gray, cv2.CV_64F).var()
+        
+    # Convert to YCrCb for brightness and contrast check
+    ycrcb = cv2.cvtColor(image, cv2.COLOR_BGR2YCrCb)
+    y_channel = ycrcb[:, :, 0]
+    mean_brightness = np.mean(y_channel)
+    std_contrast = np.std(y_channel)
+
+    print(f"--- Image Statistics {tag} ---")
+    print(f"Laplacian Variance (Sharpness): {laplacian_var:.2f}")
+    print(f"Mean Brightness (Y): {mean_brightness:.2f}")
+    print(f"Std Contrast (Y): {std_contrast:.2f}")
+    print("-------------------------------")
 class TrafficSignApp:
     def __init__(self, root):
         self.root = root
@@ -45,15 +71,29 @@ class TrafficSignApp:
 
     def load_image(self):
         """
-        This function allows the user to upload an image file and display it on the canvas.
+        This function loads an image from the file system and displays it on the canvas.
+        load image: PIL image -> OpenCV image -> pre-process -> OpenCV image -> PIL image
         """
         self.stop_camera()
-        self.root.after(100)  # đợi 100ms để đảm bảo camera được release
+        self.root.after(100)
         file_path = filedialog.askopenfilename(filetypes=[("Image files", "*.jpg *.png *.jpeg")])
         if file_path:
             image = Image.open(file_path)
             image = image.resize((800, 600))
-            self.img = ImageTk.PhotoImage(image)
+            # Convert PIL image to NumPy array for OpenCV
+            image_np = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+            
+            # Log stats before processing
+            # log_image_stats(image_np, tag="(Before Preprocessing)")
+            
+            processed_image = Preprocess.pre_process(image_np)
+            
+            # Log stats after processing
+            # log_image_stats(processed_image, tag="(After Preprocessing)")
+            
+            # Convert back to PIL Image for Tkinter
+            processed_image = Image.fromarray(cv2.cvtColor(processed_image, cv2.COLOR_BGR2RGB))
+            self.img = ImageTk.PhotoImage(processed_image)
             self.canvas.create_image(0, 0, anchor="nw", image=self.img)
 
     def start_camera(self):
@@ -69,16 +109,29 @@ class TrafficSignApp:
         """
         This function continuously captures frames from the camera and updates the canvas.
         """
+        last_log_time = 0  
+        log_interval = 5
         while self.running and self.cap.isOpened():
             ret, frame = self.cap.read()
             if ret:
-                frame = cv2.resize(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), (800, 600))
-                img = Image.fromarray(frame)
+                self.current_frame = frame.copy()
+                
+                now = time.time()
+                if now - last_log_time >= log_interval:
+                    log_image_stats(self.current_frame, tag="(Camera Frame - Before Preprocessing)")
+                    processed_image = Preprocess.pre_process(self.current_frame)
+                    log_image_stats(processed_image, tag="(Camera Frame - After Preprocessing)")
+                    last_log_time = now
+                else:
+                    processed_image = Preprocess.pre_process(self.current_frame)
+
+                display_frame = cv2.cvtColor(self.current_frame, cv2.COLOR_BGR2RGB)
+                display_frame = cv2.resize(display_frame, (800, 600))
+                img = Image.fromarray(display_frame)
                 imgtk = ImageTk.PhotoImage(image=img)
-                
+
                 self.root.after(0, self.update_canvas, imgtk)
-                
-                cv2.waitKey(15)  
+                cv2.waitKey(15) 
                 
     def update_canvas(self, imgtk):
         """
