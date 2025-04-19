@@ -83,27 +83,29 @@ class TrafficSignApp:
         self.root.after(100)
         file_path = filedialog.askopenfilename(filetypes=[("Image files", "*.jpg *.png *.jpeg")])
         if file_path:
+            # Open and resize the original image
             image = Image.open(file_path)
             image = image.resize((800, 600))
-
-            # Convert PIL image to NumPy array for OpenCV
-            image_np = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+            original_np = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
 
             # Log stats before processing
-            log_image_stats(image_np, tag="(Before Preprocessing)")
+            log_image_stats(original_np, tag="(Before Preprocessing)")
 
-            # Preprocess the image
-            processed_image = Preprocess.pre_process(image_np)
+            # Preprocess the image for detection (but don't display preprocessing)
+            processed_image = Preprocess.pre_process(original_np.copy())
             
             # Log stats after processing
             log_image_stats(processed_image, tag="(After Preprocessing)")
 
-            # Detect traffic signs
-            processed_image_with_boxes = Detection.detect_traffic_sign(processed_image, self.yolo_model)
+            # Detect traffic signs on the processed image
+            detections = Detection.detect_signs(processed_image, self.yolo_model)
+            
+            # Draw detections on original image
+            original_with_boxes = Detection.draw_detections(original_np, detections)
 
             # Convert back to PIL Image for Tkinter
-            processed_image_with_boxes = Image.fromarray(cv2.cvtColor(processed_image_with_boxes, cv2.COLOR_BGR2RGB))
-            self.img = ImageTk.PhotoImage(processed_image_with_boxes)
+            display_image = Image.fromarray(cv2.cvtColor(original_with_boxes, cv2.COLOR_BGR2RGB))
+            self.img = ImageTk.PhotoImage(display_image)
             self.canvas.create_image(0, 0, anchor="nw", image=self.img)
 
     def start_camera(self):
@@ -118,7 +120,7 @@ class TrafficSignApp:
     def camera_loop(self):
         """
         This function continuously captures frames from the camera and updates the canvas.
-        Detect traffic signs in each frame.
+        Detect traffic signs in each frame but display original with boxes drawn.
         """
         last_log_time = 0  
         log_interval = 5
@@ -126,30 +128,31 @@ class TrafficSignApp:
         while self.running and self.cap.isOpened():
             ret, frame = self.cap.read()
             if ret:
-                self.current_frame = frame.copy()
-
-                # --- Display raw frame only ---
-                display_frame = cv2.cvtColor(self.current_frame, cv2.COLOR_BGR2RGB)
-                display_frame = cv2.resize(display_frame, (800, 600))
-                img = Image.fromarray(display_frame)
-                imgtk = ImageTk.PhotoImage(image=img)
-                self.root.after(0, self.update_canvas, imgtk)
+                # Store original frame
+                original_frame = frame.copy()
 
                 # --- Background processing for detection ---
                 now = time.time()
                 if now - last_log_time >= log_interval:
-                    # Logging input stats
-                    log_image_stats(self.current_frame, tag="(Camera Frame - Before Preprocessing)")
-                    processed_image = Preprocess.pre_process(self.current_frame)
-                    log_image_stats(processed_image, tag="(Camera Frame - After Preprocessing)")
-
-                    # Run detection (in background)
-                    _ = Detection.detect_traffic_sign(processed_image, self.yolo_model)
-
+                    log_image_stats(original_frame, tag="(Camera Frame - Before Preprocessing)")
+                    processed_frame = Preprocess.pre_process(original_frame.copy())
+                    log_image_stats(processed_frame, tag="(Camera Frame - After Preprocessing)")
                     last_log_time = now
                 else:
-                    processed_image = Preprocess.pre_process(self.current_frame)
-                    _ = Detection.detect_traffic_sign(processed_image, self.yolo_model)
+                    processed_frame = Preprocess.pre_process(original_frame.copy())
+
+                # Run detection on processed frame
+                detections = Detection.detect_signs(processed_frame, self.yolo_model)
+                
+                # Draw detections on original frame
+                frame_with_boxes = Detection.draw_detections(original_frame, detections)
+
+                # Display the original frame with boxes
+                display_frame = cv2.cvtColor(frame_with_boxes, cv2.COLOR_BGR2RGB)
+                display_frame = cv2.resize(display_frame, (800, 600))
+                img = Image.fromarray(display_frame)
+                imgtk = ImageTk.PhotoImage(image=img)
+                self.root.after(0, self.update_canvas, imgtk)
 
                 cv2.waitKey(15)
                 
