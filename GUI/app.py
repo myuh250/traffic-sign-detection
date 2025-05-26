@@ -59,14 +59,19 @@ class TrafficSignApp:
         self.camera_button = tk.Button(self.button_frame, text="Use Camera", command=self.start_camera)
         self.camera_button.grid(row=0, column=1, padx=5)
         
-        self.camera_button = tk.Button(self.button_frame, text="Stop Camera", command=self.stop_camera)
-        self.camera_button.grid(row=0, column=2, padx=5)
+        self.stop_button = tk.Button(self.button_frame, text="Stop Camera", command=self.stop_camera)
+        self.stop_button.grid(row=0, column=2, padx=5)
 
         # Right frame for info
         self.right_frame = tk.Frame(self.root, bg="#e0e0e0")
         self.right_frame.grid(row=0, column=1, sticky="nsew")
+        
+        group_info_text = "Group Members:\n21110025 Nguyễn Thành Hiếu\n22110016 Nguyễn Hữu Danh\n22110037 Nguyễn Tiến Huy"
+        self.group_label = tk.Label(self.right_frame, text=group_info_text, font=("Arial", 12), justify="left", bg="#e0e0e0")
+        self.group_label.pack(padx=20, pady=10)
 
-        self.info_label = tk.Label(self.right_frame, text="Traffic Sign Info:\n(placeholder)", font=("Arial", 14), justify="left")
+        # Label to display traffic sign info
+        self.info_label = tk.Label(self.right_frame, text="Traffic Sign Info:\n", font=("Arial", 14), justify="left")
         self.info_label.pack(padx=20, pady=20)
 
         self.cap = None
@@ -77,11 +82,11 @@ class TrafficSignApp:
     def load_image(self):
         """
         Load an image from the file system and display it on the canvas.
-        Process the image and detect traffic signs.
+        Process the image and detect traffic signs, then update the right frame with info.
         """
         self.stop_camera()
         self.root.after(100)
-        file_path = filedialog.askopenfilename(filetypes=[("Image files", "*.jpg *.png *.jpeg")])
+        file_path = filedialog.askopenfilename(filetypes=[("Image files", "*.jpg *.png *.jpeg *.webp")])
         if file_path:
             # Open and resize the original image
             image = Image.open(file_path)
@@ -91,7 +96,7 @@ class TrafficSignApp:
             # Log stats before processing
             log_image_stats(original_np, tag="(Before Preprocessing)")
 
-            # Preprocess the image for detection (but don't display preprocessing)
+            # Preprocess the image for detection
             processed_image = Preprocess.pre_process(original_np.copy())
             
             # Log stats after processing
@@ -103,10 +108,13 @@ class TrafficSignApp:
             # Draw detections on original image
             original_with_boxes = Detection.draw_detections(original_np, detections)
 
-            # Convert back to PIL Image for Tkinter
+            # Update canvas with the image
             display_image = Image.fromarray(cv2.cvtColor(original_with_boxes, cv2.COLOR_BGR2RGB))
             self.img = ImageTk.PhotoImage(display_image)
             self.canvas.create_image(0, 0, anchor="nw", image=self.img)
+
+            # Update right frame with detection info
+            self.update_info_panel(detections)
 
     def start_camera(self):
         """
@@ -154,6 +162,9 @@ class TrafficSignApp:
                 imgtk = ImageTk.PhotoImage(image=img)
                 self.root.after(0, self.update_canvas, imgtk)
 
+                # Update right frame with detection info
+                self.root.after(0, self.update_info_panel, detections)
+                
                 cv2.waitKey(15)
                 
     def update_canvas(self, imgtk):
@@ -164,6 +175,26 @@ class TrafficSignApp:
         self.canvas.imgtk = imgtk  
         self.canvas.create_image(0, 0, anchor="nw", image=imgtk)
         
+    def update_info_panel(self, detections):
+        """
+        Update the right frame with detection information.
+        
+        Args:
+            detections (list): List of detection dictionaries from detect_signs
+        """
+        # Clear previous info
+        self.info_label.config(text="Traffic Sign Info:\n")
+        
+        # Add each detection to the info label
+        if detections:
+            for i, detection in enumerate(detections, 1):
+                label = detection['label']
+                conf = detection['confidence']
+                info_text = f"{i}. {label} (Confidence: {conf:.2f}%)\n"
+                self.info_label.config(text=self.info_label.cget("text") + info_text)
+        else:
+            self.info_label.config(text=self.info_label.cget("text") + "No traffic signs detected.\n")
+
     def get_current_frame(self):
         """
         This function returns the current frame from the camera.
@@ -185,3 +216,5 @@ class TrafficSignApp:
             self.cap = None
             cv2.destroyAllWindows()
             self.canvas.delete("all")
+            # Clear info panel when stopping
+            self.update_info_panel([])

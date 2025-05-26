@@ -112,4 +112,18 @@ class Preprocess:
             image = Preprocess.clahe(image)
 
         return image
+    
+    def enhance_cropped_image(image):
+        image = cv2.resize(image, (128, 128), interpolation=cv2.INTER_AREA)
+
+        image = Preprocess.bilateral_filter(image)
+
+        if Preprocess.is_brightness(image) or Preprocess.is_contrast(image):
+            image = Preprocess.clahe(image)
+        
+        image = Preprocess.sharpen(image)
+
+        return image
+
+
 
