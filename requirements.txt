@@ -1,0 +1,9 @@
+opencv-python
+pillow
+torch
+matplotlib
+ultralytics
+tk
+numpy
+transformers     
+sentencepiece    
