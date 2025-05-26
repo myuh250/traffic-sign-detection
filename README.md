@@ -21,6 +21,7 @@ This project is a Python-based application that performs traffic sign detection 
 - **Local Language Model (LLM)**: For generating textual descriptions of traffic signs.
 
 ## Requirements
+
 - The set of packages required to run the application is listed in `requirements.txt`. You can install them using pip.
 - We are currently using Python 3.12.6
 
@@ -47,3 +48,19 @@ This project is a Python-based application that performs traffic sign detection 
     ```bash
     python main.py
     ```
+
+## Results
+
+The project has successfully implemented a traffic sign detection and classification system using state-of-the-art deep learning models. The YOLOv8-seg model demonstrated high accuracy in detecting and segmenting traffic signs from both images and video streams. 
+
+## Future Directions
+
+- Expand the dataset to include more diverse and rare traffic sign types.
+- Further improve detection and classification accuracy, especially in challenging conditions (e.g., occlusion, low light).
+- Integrate additional languages for description generation.
+- Optimize the application for deployment on embedded systems or mobile devices.
+- Explore advanced model architectures and transfer learning techniques.
+
+## Summary
+
+This project demonstrates a comprehensive approach to traffic sign detection and classification, combining modern computer vision techniques with a practical user interface. The current implementation provides a strong foundation for further research and real-world deployment.
